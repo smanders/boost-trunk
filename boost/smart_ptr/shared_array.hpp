@@ -37,6 +37,40 @@
 namespace boost
 {
 
+namespace detail
+{
+  template <class T> struct sa_wrap {};
+
+  //is T a const-qualified version of Y?
+  template< class T, class Y > struct is_const_version_impl
+  {
+    typedef char (&yes) [1];
+    typedef char (&no)  [2];
+
+    static yes f( const sa_wrap<Y const>& );
+    static no  f( ... );
+
+    enum _vt { value = sizeof( f( sa_wrap<T>() ) ) == sizeof(yes) };
+  };
+
+  struct sa_empty {};
+
+  template <bool> struct sa_is_const;
+
+  template <> struct sa_is_const<true>
+  {
+    typedef sa_empty type;
+  };
+
+  template <> struct sa_is_const<false>
+  {};
+
+  template <class T, class Y>
+  struct sa_enable
+    : public sa_is_const<is_const_version_impl<T, Y>::value>
+  {};
+}
+
 //
 //  shared_array
 //
@@ -162,6 +196,19 @@ public:
     }
 
 #endif
+
+    template <class Y>
+    shared_array(shared_array<Y> const & other,
+        typename detail::sa_enable<T, Y>::type = detail::sa_empty()) // never throws
+      : px(other.px),
+        pn(other.pn)
+    {}
+
+    // p will be returned by get, but the correct deleter will be called.
+    template <typename Y>
+    shared_array( shared_array<Y> const & r, T * p ): px( p ), pn( r.pn ) // never throws
+    {
+    }
 
     void reset() BOOST_NOEXCEPT
     {
